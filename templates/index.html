@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Molten Cursor - Windows Custom Cursor Generator</title>
+    <!-- Google Fonts for Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="aurora-glow"></div>
+
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar glass-panel">
+            <div class="brand">
+                <i class="fa-solid fa-wand-magic-sparkles brand-logo"></i>
+                <div class="brand-text">
+                    <h1>Molten Cursor</h1>
+                    <span>Windows RMM & Customizer</span>
+                </div>
+                <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Theme"><i class="fa-solid fa-moon"></i></button>
+            </div>
+
+            <!-- Configuration / Token Settings -->
+            <div class="sidebar-section">
+                <h3><i class="fa-solid fa-gears"></i> Setup & Configuration</h3>
+                <div class="token-container">
+                    <div class="input-wrapper">
+                        <input type="password" id="hf-token-input" placeholder="Paste HuggingFace Token...">
+                        <button id="save-token-btn" title="Save Token"><i class="fa-solid fa-key"></i></button>
+                    </div>
+                    <small class="helper-text">Required for AI image generation. Tokens are saved locally for this session.</small>
+                </div>
+            </div>
+
+            <!-- Select Target Cursor -->
+            <div class="sidebar-section">
+                <h3><i class="fa-solid fa-mouse-pointer"></i> Target Cursor Type</h3>
+                <div class="cursor-type-list">
+                    <button class="cursor-type-btn active" data-type="normal">
+                        <i class="fa-solid fa-arrow-pointer"></i>
+                        <div class="btn-info">
+                            <span class="title">Normal Select</span>
+                            <span class="status" id="status-normal">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="working">
+                        <span style="display: inline-flex; align-items: center; position: relative;">
+                            <i class="fa-solid fa-arrow-pointer"></i>
+                            <i class="fa-solid fa-spinner" style="font-size: 9px; position: absolute; right: -5px; bottom: -2px; color: var(--primary); opacity: 0.85; animation: spin 1s linear infinite;"></i>
+                        </span>
+                        <div class="btn-info">
+                            <span class="title">Working in Background</span>
+                            <span class="status" id="status-working">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="busy">
+                        <i class="fa-solid fa-hourglass-half"></i>
+                        <div class="btn-info">
+                            <span class="title">Busy (Hourglass)</span>
+                            <span class="status" id="status-busy">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="link">
+                        <i class="fa-solid fa-hand-pointer"></i>
+                        <div class="btn-info">
+                            <span class="title">Link Select</span>
+                            <span class="status" id="status-link">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="text">
+                        <i class="fa-solid fa-terminal"></i>
+                        <div class="btn-info">
+                            <span class="title">Text Select (I-Beam)</span>
+                            <span class="status" id="status-text">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="precision">
+                        <i class="fa-solid fa-crosshairs"></i>
+                        <div class="btn-info">
+                            <span class="title">Precision Select</span>
+                            <span class="status" id="status-precision">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="help">
+                        <i class="fa-solid fa-circle-question"></i>
+                        <div class="btn-info">
+                            <span class="title">Help Select</span>
+                            <span class="status" id="status-help">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="unavailable">
+                        <i class="fa-solid fa-ban"></i>
+                        <div class="btn-info">
+                            <span class="title">Unavailable</span>
+                            <span class="status" id="status-unavailable">Loading...</span>
+                        </div>
+                    </button>
+                    <button class="cursor-type-btn" data-type="move">
+                        <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                        <div class="btn-info">
+                            <span class="title">Move (Resize All)</span>
+                            <span class="status" id="status-move">Loading...</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="sidebar-section system-actions">
+                <button id="btn-restore-current" class="action-btn secondary-btn">
+                    <i class="fa-solid fa-arrow-rotate-left"></i> Reset Current Selected
+                </button>
+                <button id="btn-restore-all" class="action-btn danger-btn">
+                    <i class="fa-solid fa-trash-can"></i> Restore All Defaults
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <!-- Top Controls Grid -->
+            <div class="workspace-grid">
+                <!-- Creator Panel (AI / Upload) -->
+                <section class="card creator-card glass-panel">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="tab-ai"><i class="fa-solid fa-robot"></i> AI Generate</button>
+                        <button class="tab-btn" data-tab="tab-upload"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Custom</button>
+                        <button class="tab-btn" data-tab="tab-draw"><i class="fa-solid fa-paintbrush"></i> Draw Custom</button>
+                    </div>
+
+                    <div class="tab-content" id="tab-ai">
+                        <div class="ai-generator-form">
+                            <label for="ai-prompt">What should your cursor look like?</label>
+                            <textarea id="ai-prompt" placeholder="e.g. A retro neon blue pixel sword, clean edges, gaming asset style"></textarea>
+                            <button id="btn-generate-ai" class="primary-btn">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Cursor
+                            </button>
+                            <div id="ai-loading" class="spinner-container hidden">
+                                <div class="spinner"></div>
+                                <span class="spinner-text">Creating image with FLUX.1-schnell...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content hidden" id="tab-upload">
+                        <div class="upload-zone" id="drop-zone">
+                            <input type="file" id="file-input" accept="image/png, image/jpeg, image/gif" class="hidden">
+                            <i class="fa-solid fa-images upload-icon"></i>
+                            <p>Drag & Drop your PNG / JPG / GIF image here</p>
+                            <span>or click to browse from files</span>
+                        </div>
+                    </div>
+
+                    <div class="tab-content hidden" id="tab-draw">
+                        <div class="drawing-workspace">
+                            <!-- Draw Controls -->
+                            <div class="draw-tools">
+                                <button id="btn-draw-pencil" class="tool-btn active" title="Pencil Tool"><i class="fa-solid fa-pencil"></i></button>
+                                <button id="btn-draw-eraser" class="tool-btn" title="Eraser Tool"><i class="fa-solid fa-eraser"></i></button>
+                                <button id="btn-draw-clear" class="tool-btn secondary-btn" title="Clear Grid"><i class="fa-solid fa-trash-can"></i></button>
+                                <input type="color" id="draw-color-picker" value="#00f0ff">
+                            </div>
+                            <!-- Swatches -->
+                            <div class="color-swatches">
+                                <div class="swatch active" data-color="#00f0ff" style="background-color: #00f0ff;"></div>
+                                <div class="swatch" data-color="#d946ef" style="background-color: #d946ef;"></div>
+                                <div class="swatch" data-color="#ff0055" style="background-color: #ff0055;"></div>
+                                <div class="swatch" data-color="#00ff66" style="background-color: #00ff66;"></div>
+                                <div class="swatch" data-color="#ffcc00" style="background-color: #ffcc00;"></div>
+                                <div class="swatch" data-color="#ffffff" style="background-color: #ffffff;"></div>
+                                <div class="swatch" data-color="#000000" style="background-color: #000000;"></div>
+                            </div>
+                            <!-- Interactive Grid Canvas -->
+                            <div class="grid-canvas-container">
+                                <canvas id="drawing-canvas" width="32" height="32"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Live Interactive Preview Panel -->
+                <section class="card preview-card glass-panel">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-glasses"></i> Interactive Tester</h2>
+                    </div>
+                    <div class="tester-area" id="tester-box">
+                        <div class="tester-inner">
+                            <i class="fa-solid fa-circle-nodes pulse-icon"></i>
+                            <p>Hover and move your mouse here to test the cursor before applying!</p>
+                            <span class="preview-stats">Aspect Ratio: 1:1 | Resolution: Smooth Lanczos Resampled</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Image Canvas & Editing Workspace -->
+            <section class="card canvas-card glass-panel">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-crop-simple"></i> Editor & Hotspot Placement</h2>
+                    <span class="badge" id="hotspot-badge">Hotspot: X=0, Y=0</span>
+                </div>
+
+                <div class="editor-workspace">
+                    <!-- Toolbox -->
+                    <div class="editor-toolbox">
+                        <div class="tool-group">
+                            <label><i class="fa-solid fa-minimize"></i> Render Output Size</label>
+                            <div class="size-presets">
+                                <button class="preset-btn active" data-size="32">32x32</button>
+                                <button class="preset-btn" data-size="48">48x48</button>
+                                <button class="preset-btn" data-size="64">64x64</button>
+                                <button class="preset-btn" data-size="128">128x128</button>
+                            </div>
+                            <small class="helper-text">Windows scales 32x32 cursors automatically; larger sizes are ideal for High-DPI screens.</small>
+                        </div>
+
+                        <div class="tool-group">
+                            <label><i class="fa-solid fa-eye-dropper"></i> Background Removal</label>
+                            <div class="chroma-mode-selection" style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; color: var(--text-secondary);">
+                                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                    <input type="radio" name="chroma-mode" value="flood" checked style="accent-color: var(--primary);"> Edges (Flood Fill)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                    <input type="radio" name="chroma-mode" value="global" style="accent-color: var(--primary);"> Global (Chroma)
+                                </label>
+                            </div>
+                            <div class="chroma-controls">
+                                <button id="btn-color-picker" class="tool-btn" title="Pick color to make transparent">
+                                    <i class="fa-solid fa-palette"></i> Pick Color
+                                </button>
+                                <div class="picked-color-display" id="color-display"></div>
+                            </div>
+                            <div class="slider-wrapper">
+                                <span>Tolerance: <span id="tolerance-val">30</span></span>
+                                <input type="range" id="chroma-tolerance" min="0" max="255" value="30">
+                            </div>
+                            <button id="btn-clear-chroma" class="tool-btn secondary-btn hidden">
+                                <i class="fa-solid fa-clock-rotate-left"></i> Restore Original Background
+                            </button>
+                        </div>
+
+                        <div class="tool-group hotspot-info">
+                            <label><i class="fa-solid fa-crosshairs"></i> Hotspot Selection</label>
+                            <p class="desc-text">The hotspot is the exact pixel that triggers clicks. Click anywhere on the editor canvas to set it.</p>
+                            <div class="preset-hotspots">
+                                <button class="preset-btn" id="hotspot-tl">Top-Left (0,0)</button>
+                                <button class="preset-btn" id="hotspot-center">Center (Middle)</button>
+                            </div>
+                        </div>
+
+                        <div class="tool-group apply-actions">
+                            <button id="btn-apply-system" class="primary-btn pulse-glow">
+                                <i class="fa-solid fa-check-double"></i> Set Windows Cursor Globally
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Canvas Frame -->
+                    <div class="canvas-container">
+                        <div class="canvas-frame">
+                            <canvas id="editor-canvas"></canvas>
+                        </div>
+                        <p class="canvas-tip"><i class="fa-solid fa-info-circle"></i> Left-click canvas to position hotspot. Click colors to make transparent.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Alert Notifications -->
+    <div id="toast" class="toast hidden">
+        <i id="toast-icon" class="fa-solid fa-circle-info"></i>
+        <span id="toast-message">Message text</span>
+    </div>
+
+    <!-- Config Modal -->
+    <div id="config-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <h2>Welcome to Molten Cursor</h2>
+            <p>To use AI image generation (powered by FLUX), we require a free Hugging Face API Token. Enter yours below to get started:</p>
+            <input type="password" id="modal-token-input" placeholder="HF Access Token (hf_...)">
+            <div class="modal-buttons">
+                <button id="modal-save-btn" class="primary-btn">Save Token</button>
+                <button id="modal-skip-btn" class="secondary-btn">Use Uploads Only</button>
+            </div>
+            <p class="modal-help">No token? You can generate icons on the "Upload Custom" tab using standard images.</p>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Build and distribution files
+build/
+dist/
+*.manifest
+
+# Application local storage & cached cursor dumps
+cursors/
+devices_dump.json
+
+# IDE config files
+.vscode/
+.idea/
+
+# Agent config files
+.agents/
+.gemini/
