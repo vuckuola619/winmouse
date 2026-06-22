@@ -1,6 +1,19 @@
-# WinMouse - Molten Cursor Customizer 🚀
+# WinMouse — Windows Custom Cursor Generator & Customizer 🚀
 
-WinMouse (also known as Molten Cursor) is a premium, lightweight, standalone Windows application for generating, compiling, and applying custom mouse cursors. Written in Python/Flask with a PyWebView native Windows desktop container, it utilizes state-of-the-art pixel-art and image conversion algorithms to produce clean, high-DPI-aware cursors.
+<p align="center">
+  <img src="static/img/teaser.png" width="800" alt="WinMouse Teaser Mockup">
+</p>
+
+<p align="center">
+  <a href="https://github.com/vuckuola619/winmouse/actions/workflows/ci.yml">
+    <img src="https://github.com/vuckuola619/winmouse/actions/workflows/ci.yml/badge.svg" alt="WinMouse CI Build Status">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/platform-windows-lightgrey.svg" alt="Platform: Windows">
+  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT">
+</p>
+
+WinMouse (also known as Molten Cursor) is a premium, lightweight desktop application built using Python/Flask and pywebview. It wraps an advanced custom cursor engine within a beautiful, glassmorphic native desktop interface to compile and apply custom Windows cursors globally.
 
 ---
 
