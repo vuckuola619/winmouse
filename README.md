@@ -47,10 +47,19 @@ git clone https://github.com/vuckuola619/winmouse.git
 cd winmouse
 ```
 
-Create a virtual environment and install the dependencies:
-```bash
+Create a virtual environment and install dependencies:
+
+**For Command Prompt (CMD):**
+```cmd
 python -m venv .venv
 .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**For PowerShell:**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 

@@ -6,6 +6,9 @@ import ctypes
 import base64
 import requests
 import sys
+import json
+import shutil
+import zipfile
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from PIL import Image, ImageDraw
 from dotenv import load_dotenv
@@ -21,37 +24,95 @@ if getattr(sys, 'frozen', False):
 else:
     app = Flask(__name__, template_folder='templates', static_folder='static')
 
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "molten_cursor_key_129837")
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "winmouse_key_129837")
 
 # Save custom cursors in the user's persistent Local AppData directory
 LOCAL_APP_DATA = os.getenv("LOCALAPPDATA", os.path.expanduser("~"))
-CURSORS_DIR = os.path.join(LOCAL_APP_DATA, "MoltenCursor", "cursors")
+CURSORS_DIR = os.path.join(LOCAL_APP_DATA, "WinMouse", "cursors")
 if not os.path.exists(CURSORS_DIR):
     os.makedirs(CURSORS_DIR)
+
+PACKS_DIR = os.path.join(LOCAL_APP_DATA, "WinMouse", "packs")
+if not os.path.exists(PACKS_DIR):
+    os.makedirs(PACKS_DIR)
+
+# Use absolute path to static folder for bundling safety
+STATIC_PACKS_DIR = os.path.join(app.static_folder, "packs")
+if not os.path.exists(STATIC_PACKS_DIR):
+    os.makedirs(STATIC_PACKS_DIR)
 
 # Cursor names mapped to Windows Registry names
 CURSOR_REGISTRY_MAP = {
     "normal": "Arrow",
-    "link": "Hand",
-    "text": "IBeam",
-    "precision": "Crosshair",
-    "busy": "Wait",
-    "working": "AppStarting",
     "help": "Help",
+    "working": "AppStarting",
+    "busy": "Wait",
+    "precision": "Crosshair",
+    "text": "IBeam",
+    "handwriting": "NWPen",
     "unavailable": "No",
-    "move": "SizeAll"
+    "vertical": "SizeNS",
+    "horizontal": "SizeWE",
+    "diagonal_1": "SizeNWSE",
+    "diagonal_2": "SizeNESW",
+    "move": "SizeAll",
+    "alternate": "UpArrow",
+    "link": "Hand",
+    "location": "Pin",
+    "person": "Person"
 }
 
-def validate_env():
-    """Validates env variables at startup."""
-    token = os.getenv("HF_TOKEN")
-    if not token:
-        print("[WARNING] HF_TOKEN is not set in .env. AI image generation will require entering a token in the UI.")
-    else:
-        print("[INFO] HF_TOKEN is configured successfully.")
+def draw_arrow(fill_color, outline_color):
+    img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.polygon([(0,0), (22,15), (14,17), (20,26), (17,28), (11,19), (6,22)], fill=outline_color)
+    draw.polygon([(2,2), (19,13), (12,15), (18,24), (16,25), (10,17), (6,19)], fill=fill_color)
+    return img
 
-# Validate on startup
-validate_env()
+def draw_hand(fill_color, outline_color):
+    img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([10, 22, 22, 29], fill=outline_color)
+    draw.rectangle([12, 23, 20, 28], fill=fill_color)
+    draw.ellipse([8, 14, 24, 24], fill=outline_color)
+    draw.ellipse([9, 15, 23, 23], fill=fill_color)
+    draw.rectangle([14, 2, 18, 16], fill=outline_color)
+    draw.rectangle([15, 3, 17, 15], fill=fill_color)
+    draw.ellipse([7, 16, 12, 21], fill=outline_color)
+    draw.ellipse([8, 17, 11, 20], fill=fill_color)
+    return img
+
+def draw_crosshair(fill_color, outline_color):
+    img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([8, 8, 24, 24], outline=outline_color, width=2)
+    draw.ellipse([10, 10, 22, 22], outline=fill_color, width=2)
+    draw.line([16, 2, 16, 30], fill=outline_color, width=2)
+    draw.line([16, 4, 16, 28], fill=fill_color, width=2)
+    draw.line([2, 16, 30, 16], fill=outline_color, width=2)
+    draw.line([4, 16, 28, 16], fill=fill_color, width=2)
+    return img
+
+def draw_hourglass(fill_color, outline_color):
+    img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.polygon([(6,4), (26,4), (16,16), (26,28), (6,28)], fill=outline_color)
+    draw.polygon([(8,6), (24,6), (16,15), (24,26), (8,26)], fill=fill_color)
+    draw.polygon([(11,9), (21,9), (16,14)], fill=outline_color)
+    draw.polygon([(12,25), (20,25), (16,21)], fill=outline_color)
+    return img
+
+def draw_ibeam(fill_color, outline_color):
+    img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([8, 4, 24, 7], fill=outline_color)
+    draw.rectangle([13, 7, 19, 25], fill=outline_color)
+    draw.rectangle([8, 25, 24, 28], fill=outline_color)
+    draw.rectangle([10, 5, 22, 6], fill=fill_color)
+    draw.rectangle([15, 7, 17, 24], fill=fill_color)
+    draw.rectangle([10, 26, 22, 27], fill=fill_color)
+    return img
+
 
 def remove_background(img: Image.Image, chroma_color: dict, tolerance: int, mode: str) -> Image.Image:
     """
@@ -162,6 +223,84 @@ def create_ani(frames_bytes: list[bytes], jif_rate: int = 6) -> bytes:
     
     return riff_header + riff_body
 
+BACKUP_PATH = os.path.join(LOCAL_APP_DATA, "WinMouse", "backup_scheme.json")
+
+def validate_cur_bytes(data: bytes) -> bool:
+    """Validates CUR file header and structure."""
+    if len(data) < 22:  # Header (6 bytes) + at least 1 directory entry (16 bytes)
+        return False
+    if data[0:4] != b"\x00\x00\x02\x00":  # Reserved 0, Type 2 (CUR)
+        return False
+    num_images = struct.unpack('<H', data[4:6])[0]
+    if num_images == 0:
+        return False
+    for i in range(num_images):
+        entry_offset = 6 + i * 16
+        if entry_offset + 16 > len(data):
+            return False
+        img_size = struct.unpack('<I', data[entry_offset+8:entry_offset+12])[0]
+        img_offset = struct.unpack('<I', data[entry_offset+12:entry_offset+16])[0]
+        if img_offset + img_size > len(data):
+            return False
+    return True
+
+def validate_ani_bytes(data: bytes) -> bool:
+    """Validates ANI file header and RIFF/ACON structure."""
+    if len(data) < 44:  # RIFF header + anih chunk + list chunk minimums
+        return False
+    if data[0:4] != b"RIFF":
+        return False
+    riff_size = struct.unpack('<I', data[4:8])[0]
+    if riff_size + 8 > len(data):
+        return False
+    if data[8:12] != b"ACON":
+        return False
+    
+    anih_offset = data.find(b"anih")
+    if anih_offset == -1 or anih_offset + 8 > len(data):
+        return False
+    anih_size = struct.unpack('<I', data[anih_offset+4:anih_offset+8])[0]
+    if anih_offset + 8 + anih_size > len(data):
+        return False
+        
+    list_offset = data.find(b"LIST")
+    if list_offset == -1 or list_offset + 8 > len(data):
+        return False
+        
+    return True
+
+def save_backup_scheme():
+    """
+    Saves current system cursors to backup_scheme.json before applying custom ones.
+    Only backups cursor paths that do not point to custom WinMouse/MoltenCursor paths.
+    """
+    current_cursors = get_current_system_cursors()
+    backup_data = {}
+    
+    if os.path.exists(BACKUP_PATH):
+        try:
+            with open(BACKUP_PATH, "r") as f:
+                backup_data = json.load(f)
+        except Exception:
+            backup_data = {}
+
+    updated = False
+    for cursor_key, val in current_cursors.items():
+        is_custom = "WinMouse" in val or "MoltenCursor" in val
+        if not is_custom:
+            existing_backup = backup_data.get(cursor_key)
+            if not existing_backup or (val not in ("", "Default") and existing_backup != val):
+                backup_data[cursor_key] = val
+                updated = True
+
+    if updated or not os.path.exists(BACKUP_PATH):
+        os.makedirs(os.path.dirname(BACKUP_PATH), exist_ok=True)
+        try:
+            with open(BACKUP_PATH, "w") as f:
+                json.dump(backup_data, f, indent=4)
+        except Exception as e:
+            print(f"[ERROR] Failed to write backup scheme: {e}")
+
 def apply_cursor_to_system(cursor_type: str, cur_path: str):
     """
     Updates the registry and calls SystemParametersInfoW to refresh the cursor immediately.
@@ -169,6 +308,9 @@ def apply_cursor_to_system(cursor_type: str, cur_path: str):
     reg_name = CURSOR_REGISTRY_MAP.get(cursor_type)
     if not reg_name:
         raise ValueError(f"Unknown cursor type: {cursor_type}")
+
+    # Ensure we back up the original system settings first
+    save_backup_scheme()
 
     # Set value in HKCU\Control Panel\Cursors
     key_path = r"Control Panel\Cursors"
@@ -178,32 +320,42 @@ def apply_cursor_to_system(cursor_type: str, cur_path: str):
     finally:
         winreg.CloseKey(key)
 
-    # SPI_SETCURSORS = 0x0057
-    # SPIF_UPDATEINIFILE = 0x01
-    # SPIF_SENDCHANGE = 0x02
-    # 0x01 | 0x02 = 0x03
+    # Force system refresh
     result = ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 3)
     if not result:
         print(f"[WARNING] SystemParametersInfoW returned 0, but registry was updated successfully.")
 
 def restore_defaults(cursor_type: str = "all"):
     """
-    Restores default cursor by clearing the registry values and reloading.
+    Restores original system cursors from backup_scheme.json if available,
+    otherwise clears the registry values (safe Windows default).
     """
+    backup_data = {}
+    if os.path.exists(BACKUP_PATH):
+        try:
+            with open(BACKUP_PATH, "r") as f:
+                backup_data = json.load(f)
+        except Exception as e:
+            print(f"[WARNING] Failed to load backup scheme: {e}")
+
     key_path = r"Control Panel\Cursors"
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
     try:
         if cursor_type == "all":
-            for reg_name in CURSOR_REGISTRY_MAP.values():
-                winreg.SetValueEx(key, reg_name, 0, winreg.REG_SZ, "")
+            for cursor_key, reg_name in CURSOR_REGISTRY_MAP.items():
+                original_val = backup_data.get(cursor_key, "")
+                val_to_write = original_val if original_val != "Default" else ""
+                winreg.SetValueEx(key, reg_name, 0, winreg.REG_SZ, val_to_write)
         else:
             reg_name = CURSOR_REGISTRY_MAP.get(cursor_type)
             if reg_name:
-                winreg.SetValueEx(key, reg_name, 0, winreg.REG_SZ, "")
+                original_val = backup_data.get(cursor_type, "")
+                val_to_write = original_val if original_val != "Default" else ""
+                winreg.SetValueEx(key, reg_name, 0, winreg.REG_SZ, val_to_write)
     finally:
         winreg.CloseKey(key)
 
-    # Reload cursors
+    # Force system refresh
     ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 3)
 
 def get_current_system_cursors():
@@ -353,10 +505,23 @@ def apply():
             # Build ANI bytes with default rate 6 jiffies (~100ms)
             ani_bytes = create_ani(cur_frames, jif_rate=6)
             
-            cur_filename = f"molten_{cursor_type}.ani"
+            # Validate generated animated cursor bytes
+            if not validate_ani_bytes(ani_bytes):
+                raise ValueError("Generated Animated Cursor (.ani) bytes are invalid structurally.")
+            
+            cur_filename = f"winmouse_{cursor_type}.ani"
             cur_path = os.path.join(CURSORS_DIR, cur_filename)
             with open(cur_path, "wb") as f:
                 f.write(ani_bytes)
+                
+            # Save static preview of first frame
+            try:
+                first_frame = Image.open(io.BytesIO(image_bytes))
+                first_frame = remove_background(first_frame.convert("RGBA"), chroma_color, tolerance, remove_mode)
+                png_path = os.path.join(CURSORS_DIR, f"winmouse_{cursor_type}.png")
+                first_frame.save(png_path, "PNG")
+            except Exception as e:
+                print(f"[WARNING] Failed to save GIF preview PNG: {e}")
         else:
             # Convert single static image to PIL and apply background removal
             img = Image.open(io.BytesIO(image_bytes))
@@ -364,10 +529,22 @@ def apply():
             
             # Convert single static image to multi-res CUR bytes
             cur_bytes = convert_png_to_cur(img, hotspot_x, hotspot_y, size)
-            cur_filename = f"molten_{cursor_type}.cur"
+            
+            # Validate generated cursor bytes
+            if not validate_cur_bytes(cur_bytes):
+                raise ValueError("Generated Custom Cursor (.cur) bytes are invalid structurally.")
+            
+            cur_filename = f"winmouse_{cursor_type}.cur"
             cur_path = os.path.join(CURSORS_DIR, cur_filename)
             with open(cur_path, "wb") as f:
                 f.write(cur_bytes)
+                
+            # Save PNG preview
+            try:
+                png_path = os.path.join(CURSORS_DIR, f"winmouse_{cursor_type}.png")
+                img.save(png_path, "PNG")
+            except Exception as e:
+                print(f"[WARNING] Failed to save preview PNG: {e}")
 
         # Apply to system registry and reload
         apply_cursor_to_system(cursor_type, cur_path)
@@ -378,9 +555,24 @@ def apply():
             "path": cur_path,
             "cursors": get_current_system_cursors()
         })
+    except PermissionError as e:
+        print(f"[ERROR] Registry permission denied: {e}")
+        return jsonify({
+            "success": False, 
+            "error": "Registry write permission denied. Try running as Administrator if registry writes are restricted."
+        }), 403
+    except ValueError as e:
+        print(f"[ERROR] Validation failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Validation Error: {str(e)}"
+        }), 400
     except Exception as e:
         print(f"[ERROR] Failed to apply cursor: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": f"Application Error: {str(e)}"
+        }), 500
 
 @app.route("/api/restore", methods=["POST"])
 def restore():
@@ -394,8 +586,426 @@ def restore():
             "message": "Default cursors restored successfully!",
             "cursors": get_current_system_cursors()
         })
+    except PermissionError as e:
+        print(f"[ERROR] Registry permission denied on restore: {e}")
+        return jsonify({
+            "success": False, 
+            "error": "Registry write permission denied. Try running as Administrator if registry writes are restricted."
+        }), 403
+    except Exception as e:
+        print(f"[ERROR] Failed to restore: {e}")
+        return jsonify({"success": False, "error": f"Restore Error: {str(e)}"}), 500
+
+# --- Packs Manager Helper Functions ---
+
+UNDO_BACKUP_PATH = os.path.join(LOCAL_APP_DATA, "WinMouse", "last_pack_undo.json")
+
+def save_pack_undo_backup():
+    """Saves current system cursors to last_pack_undo.json before applying a pack."""
+    current_cursors = get_current_system_cursors()
+    os.makedirs(os.path.dirname(UNDO_BACKUP_PATH), exist_ok=True)
+    try:
+        with open(UNDO_BACKUP_PATH, "w") as f:
+            json.dump(current_cursors, f, indent=4)
+    except Exception as e:
+        print(f"[ERROR] Failed to save pack undo backup: {e}")
+
+def apply_cursor_registry_only(cursor_type: str, cur_path: str):
+    """Updates the registry for a cursor type without triggering reload."""
+    reg_name = CURSOR_REGISTRY_MAP.get(cursor_type)
+    if not reg_name:
+        return
+    key_path = r"Control Panel\Cursors"
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+    try:
+        winreg.SetValueEx(key, reg_name, 0, winreg.REG_SZ, cur_path)
+    finally:
+        winreg.CloseKey(key)
+
+# --- Packs Manager Routes ---
+
+@app.route("/api/packs", methods=["GET"])
+def list_packs():
+    """Returns a list of all available packs (built-in + user)."""
+    packs = []
+    
+    # Scan built-in packs
+    if os.path.exists(STATIC_PACKS_DIR):
+        for name in os.listdir(STATIC_PACKS_DIR):
+            p_dir = os.path.join(STATIC_PACKS_DIR, name)
+            p_json = os.path.join(p_dir, "pack.json")
+            if os.path.isdir(p_dir) and os.path.exists(p_json):
+                try:
+                    with open(p_json, "r") as f:
+                        meta = json.load(f)
+                    packs.append({
+                        "id": name,
+                        "name": meta.get("name", name),
+                        "type": "builtin"
+                    })
+                except Exception:
+                    pass
+                    
+    # Scan user-saved packs
+    if os.path.exists(PACKS_DIR):
+        for name in os.listdir(PACKS_DIR):
+            p_dir = os.path.join(PACKS_DIR, name)
+            p_json = os.path.join(p_dir, "pack.json")
+            if os.path.isdir(p_dir) and os.path.exists(p_json):
+                try:
+                    with open(p_json, "r") as f:
+                        meta = json.load(f)
+                    packs.append({
+                        "id": name,
+                        "name": meta.get("name", name),
+                        "type": "user"
+                    })
+                except Exception:
+                    pass
+                    
+    return jsonify(packs)
+
+@app.route("/api/packs/preview/<pack_name>/<cursor_type>", methods=["GET"])
+def get_pack_preview(pack_name, cursor_type):
+    """Serves the PNG thumbnail of a cursor within a pack."""
+    # Check user packs first, then built-in packs
+    img_path = os.path.join(PACKS_DIR, pack_name, f"{cursor_type}.png")
+    if not os.path.exists(img_path):
+        img_path = os.path.join(STATIC_PACKS_DIR, pack_name, f"{cursor_type}.png")
+        
+    if os.path.exists(img_path):
+        return send_from_directory(os.path.dirname(img_path), os.path.basename(img_path))
+    else:
+        # Return 1x1 transparent PNG fallback
+        transparent_pixel = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+        return send_file(io.BytesIO(transparent_pixel), mimetype="image/png")
+
+@app.route("/api/packs/save", methods=["POST"])
+def save_pack():
+    """Saves the current applied custom cursors as a reusable pack."""
+    data = request.json or {}
+    pack_name = data.get("name", "").strip()
+    if not pack_name:
+        return jsonify({"success": False, "error": "Pack name is required"}), 400
+        
+    import re
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '', pack_name)
+    if not safe_name:
+        return jsonify({"success": False, "error": "Invalid pack name character. Use alphanumeric names."}), 400
+        
+    target_dir = os.path.join(PACKS_DIR, safe_name)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    manifest = {
+        "name": pack_name,
+        "cursors": {}
+    }
+    
+    import shutil
+    copied_any = False
+    
+    for role in CURSOR_REGISTRY_MAP.keys():
+        cur_file = f"winmouse_{role}.cur"
+        ani_file = f"winmouse_{role}.ani"
+        png_file = f"winmouse_{role}.png"
+        
+        source_file = None
+        ext = None
+        
+        if os.path.exists(os.path.join(CURSORS_DIR, ani_file)):
+            source_file = ani_file
+            ext = "ani"
+        elif os.path.exists(os.path.join(CURSORS_DIR, cur_file)):
+            source_file = cur_file
+            ext = "cur"
+            
+        if source_file:
+            shutil.copy(os.path.join(CURSORS_DIR, source_file), os.path.join(target_dir, f"{role}.{ext}"))
+            manifest["cursors"][role] = f"{role}.{ext}"
+            copied_any = True
+            
+            # Also copy PNG preview
+            if os.path.exists(os.path.join(CURSORS_DIR, png_file)):
+                shutil.copy(os.path.join(CURSORS_DIR, png_file), os.path.join(target_dir, f"{role}.png"))
+                
+    if not copied_any:
+        return jsonify({"success": False, "error": "No custom cursors are currently applied. Customize some cursor roles first!"}), 400
+        
+    with open(os.path.join(target_dir, "pack.json"), "w") as f:
+        json.dump(manifest, f, indent=4)
+        
+    return jsonify({"success": True, "message": f"Pack '{pack_name}' saved successfully!"})
+
+@app.route("/api/packs/apply", methods=["POST"])
+def apply_pack():
+    """Applies all cursors inside a pack to the system registry."""
+    data = request.json or {}
+    pack_id = data.get("id", "").strip()
+    pack_type = data.get("type", "builtin")
+    
+    if not pack_id:
+        return jsonify({"success": False, "error": "Pack ID is required"}), 400
+        
+    if pack_type == "builtin":
+        pack_dir = os.path.join(STATIC_PACKS_DIR, pack_id)
+    else:
+        pack_dir = os.path.join(PACKS_DIR, pack_id)
+        
+    pack_json = os.path.join(pack_dir, "pack.json")
+    if not os.path.exists(pack_json):
+        return jsonify({"success": False, "error": "Pack not found"}), 404
+        
+    try:
+        with open(pack_json, "r") as f:
+            meta = json.load(f)
+            
+        cursors = meta.get("cursors", {})
+        
+        # Save undo backup
+        save_pack_undo_backup()
+        
+        import shutil
+        for role, filename in cursors.items():
+            src_path = os.path.join(pack_dir, filename)
+            if os.path.exists(src_path):
+                ext = os.path.splitext(filename)[1]
+                dest_filename = f"winmouse_{role}{ext}"
+                dest_path = os.path.join(CURSORS_DIR, dest_filename)
+                
+                shutil.copy(src_path, dest_path)
+                
+                # Copy preview PNG
+                png_src = os.path.join(pack_dir, f"{role}.png")
+                if os.path.exists(png_src):
+                    shutil.copy(png_src, os.path.join(CURSORS_DIR, f"winmouse_{role}.png"))
+                    
+                # Update registry key
+                apply_cursor_registry_only(role, dest_path)
+                
+        # Force reload cursors once
+        ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 3)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Applied pack '{meta.get('name')}' successfully!",
+            "cursors": get_current_system_cursors()
+        })
+    except PermissionError:
+        return jsonify({"success": False, "error": "Registry access denied. Please run as Administrator."}), 403
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/packs/undo", methods=["POST"])
+def undo_pack():
+    """Undoes the last applied pack, reverting system cursors."""
+    if not os.path.exists(UNDO_BACKUP_PATH):
+        return jsonify({"success": False, "error": "No pack apply history found to undo."}), 400
+        
+    try:
+        with open(UNDO_BACKUP_PATH, "r") as f:
+            backup_data = json.load(f)
+            
+        key_path = r"Control Panel\Cursors"
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+        try:
+            for cursor_key, val in backup_data.items():
+                reg_name = CURSOR_REGISTRY_MAP.get(cursor_key)
+                if reg_name:
+                    val_to_write = val if val != "Default" else ""
+                    winreg.SetValueEx(key, reg_name, 0, winreg.REG_SZ, val_to_write)
+        finally:
+            winreg.CloseKey(key)
+            
+        # Refresh system
+        ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 3)
+        
+        # Remove backup file so we can't double undo
+        os.remove(UNDO_BACKUP_PATH)
+        
+        return jsonify({
+            "success": True,
+            "message": "Reverted last applied pack successfully!",
+            "cursors": get_current_system_cursors()
+        })
+    except PermissionError:
+        return jsonify({"success": False, "error": "Registry access denied. Please run as Administrator."}), 403
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/packs/export/<pack_name>", methods=["GET"])
+def export_pack(pack_name):
+    """Packages a cursor pack into a downloadable .winmousepack ZIP file."""
+    pack_dir = os.path.join(PACKS_DIR, pack_name)
+    if not os.path.exists(pack_dir):
+        pack_dir = os.path.join(STATIC_PACKS_DIR, pack_name)
+        
+    if not os.path.exists(pack_dir):
+        return "Pack not found", 404
+        
+    import zipfile
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for root, dirs, files in os.walk(pack_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, pack_dir)
+                zip_file.write(file_path, arcname)
+                
+    memory_file.seek(0)
+    from flask import send_file
+    return send_file(
+        memory_file,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"{pack_name}.winmousepack"
+    )
+
+@app.route("/api/packs/import", methods=["POST"])
+def import_pack():
+    """Imports and extracts a .winmousepack zip file."""
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file uploaded"}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "No selected file"}), 400
+        
+    if not file.filename.endswith('.winmousepack') and not file.filename.endswith('.zip'):
+        return jsonify({"success": False, "error": "Invalid file format. Must be a .winmousepack"}), 400
+        
+    try:
+        import zipfile
+        import re
+        
+        pack_name = os.path.splitext(file.filename)[0]
+        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '', pack_name)
+        if not safe_name:
+            safe_name = "imported_pack"
+            
+        target_dir = os.path.join(PACKS_DIR, safe_name)
+        os.makedirs(target_dir, exist_ok=True)
+        
+        zip_data = io.BytesIO(file.read())
+        with zipfile.ZipFile(zip_data, 'r') as zip_ref:
+            for member in zip_ref.namelist():
+                filename = os.path.basename(member)
+                if not filename or member != filename:
+                    continue
+                if not (filename.endswith('.cur') or filename.endswith('.ani') or filename.endswith('.png') or filename == 'pack.json'):
+                    continue
+                    
+                with open(os.path.join(target_dir, filename), "wb") as f:
+                    f.write(zip_ref.read(member))
+                    
+        return jsonify({"success": True, "message": f"Pack '{pack_name}' imported successfully!"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/packs/delete", methods=["POST"])
+def delete_pack():
+    """Deletes a custom user pack."""
+    data = request.json or {}
+    pack_id = data.get("id", "").strip()
+    if not pack_id:
+        return jsonify({"success": False, "error": "Pack ID required"}), 400
+        
+    target_dir = os.path.join(PACKS_DIR, pack_id)
+    if not os.path.exists(target_dir):
+        return jsonify({"success": False, "error": "Pack not found or is a built-in pack"}), 404
+        
+    try:
+        import shutil
+        shutil.rmtree(target_dir)
+        return jsonify({"success": True, "message": "Pack deleted successfully!"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+def generate_default_packs():
+    """Generates two built-in packs (Neon Cyber and Retro Pixel) offline."""
+    packs_config = {
+        "NeonCyber": {
+            "name": "Neon Cyber",
+            "fill": (0, 240, 255, 255),       # Cyan
+            "outline": (217, 70, 239, 255)   # Magenta
+        },
+        "RetroPixel": {
+            "name": "Retro Pixel",
+            "fill": (255, 255, 255, 255),     # White
+            "outline": (0, 0, 0, 255)         # Black
+        }
+    }
+    
+    os.makedirs(STATIC_PACKS_DIR, exist_ok=True)
+    
+    for pack_key, conf in packs_config.items():
+        pack_dir = os.path.join(STATIC_PACKS_DIR, pack_key)
+        os.makedirs(pack_dir, exist_ok=True)
+        
+        # Save pack.json
+        manifest_path = os.path.join(pack_dir, "pack.json")
+        manifest = {
+            "name": conf["name"],
+            "cursors": {}
+        }
+        
+        fill = conf["fill"]
+        outline = conf["outline"]
+        
+        # Create images for each role
+        for role in CURSOR_REGISTRY_MAP.keys():
+            if role in ["normal", "working", "help", "alternate"]:
+                img = draw_arrow(fill, outline)
+                hx, hy = 0, 0
+            elif role in ["link", "location", "person"]:
+                img = draw_hand(fill, outline)
+                hx, hy = 16, 2
+            elif role in ["precision"]:
+                img = draw_crosshair(fill, outline)
+                hx, hy = 16, 16
+            elif role in ["busy"]:
+                img = draw_hourglass(fill, outline)
+                hx, hy = 16, 16
+            elif role in ["text"]:
+                img = draw_ibeam(fill, outline)
+                hx, hy = 16, 16
+            else: # Resizing and others
+                img = draw_crosshair(fill, outline) # Fallback
+                hx, hy = 16, 16
+            
+            # Save CUR file
+            cur_bytes = convert_png_to_cur(img, hx, hy)
+            cur_filename = f"{role}.cur"
+            cur_path = os.path.join(pack_dir, cur_filename)
+            with open(cur_path, "wb") as f:
+                f.write(cur_bytes)
+                
+            # Save PNG preview
+            png_filename = f"{role}.png"
+            png_path = os.path.join(pack_dir, png_filename)
+            img.save(png_path, "PNG")
+            
+            manifest["cursors"][role] = cur_filename
+            
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=4)
+
+def validate_env():
+    """Validates env variables at startup."""
+    token = os.getenv("HF_TOKEN")
+    if not token:
+        print("[WARNING] HF_TOKEN is not set in .env. AI image generation will require entering a token in the UI.")
+    else:
+        print("[INFO] HF_TOKEN is configured successfully.")
+    
+    # Generate default packs offline at startup
+    try:
+        generate_default_packs()
+        print("[INFO] Default offline packs generated successfully.")
+    except Exception as e:
+        print(f"[ERROR] Failed to generate default packs: {e}")
+
+# Validate on startup
+validate_env()
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
