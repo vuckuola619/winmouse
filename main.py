@@ -14,8 +14,27 @@ def get_free_port() -> int:
     return port
 
 def run_flask(port: int):
-    # Disable development reloader to prevent duplicate threads in pywebview
-    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+    # Bind to 0.0.0.0 so both the webview and browser can access the app
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+class Api:
+    def __init__(self):
+        self.window = None
+
+    def set_window(self, window):
+        self.window = window
+
+    def minimize(self):
+        if self.window:
+            self.window.minimize()
+
+    def toggle_maximize(self):
+        if self.window:
+            self.window.toggle_fullscreen()
+
+    def close(self):
+        if self.window:
+            self.window.destroy()
 
 if __name__ == "__main__":
     port = get_free_port()
@@ -24,14 +43,25 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask, args=(port,), daemon=True)
     flask_thread.start()
     
-    # Launch native desktop window pointing to the Flask server (compact fixed size)
-    webview.create_window(
-        title="Molten Cursor Customizer",
+    print(f"\n  WinMouse is running!")
+    print(f"  Desktop App: launching native window...")
+    print(f"  Web Browser: http://localhost:{port}  (open in any browser)\n")
+    
+    api = Api()
+    
+    # Launch native desktop window pointing to the Flask server
+    window = webview.create_window(
+        title="WinMouse Cursor Customizer",
         url=f"http://127.0.0.1:{port}",
-        width=1080,
-        height=720,
-        resizable=False
+        width=1280,
+        height=820,
+        min_size=(960, 680),
+        resizable=True,
+        frameless=True,
+        easy_drag=False,
+        js_api=api
     )
+    api.set_window(window)
     
     # Start the native window loop (blocks until window is closed)
     webview.start()

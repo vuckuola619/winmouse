@@ -1,0 +1,22 @@
+{
+    "name": "Retro Pixel",
+    "cursors": {
+        "normal": "normal.cur",
+        "help": "help.cur",
+        "working": "working.cur",
+        "busy": "busy.cur",
+        "precision": "precision.cur",
+        "text": "text.cur",
+        "handwriting": "handwriting.cur",
+        "unavailable": "unavailable.cur",
+        "vertical": "vertical.cur",
+        "horizontal": "horizontal.cur",
+        "diagonal_1": "diagonal_1.cur",
+        "diagonal_2": "diagonal_2.cur",
+        "move": "move.cur",
+        "alternate": "alternate.cur",
+        "link": "link.cur",
+        "location": "location.cur",
+        "person": "person.cur"
+    }
+}

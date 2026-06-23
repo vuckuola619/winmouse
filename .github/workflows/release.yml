@@ -1,0 +1,44 @@
+name: WinMouse Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller==6.21.0
+
+    - name: Build Executable
+      run: |
+        pyinstaller main.spec --noconfirm
+
+    - name: Rename build output to Portable
+      shell: pwsh
+      run: |
+        Move-Item -Path dist/WinMouse.exe -Destination dist/WinMouse-Portable.exe
+
+    - name: Publish Release Assets
+      uses: softprops/action-gh-release@v2
+      with:
+        files: dist/WinMouse-Portable.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
