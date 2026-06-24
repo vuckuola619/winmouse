@@ -1,0 +1,22 @@
+{
+    "name": "Cyber Pulse (Animated)",
+    "cursors": {
+        "normal": "normal.ani",
+        "help": "help.cur",
+        "working": "working.cur",
+        "busy": "busy.ani",
+        "precision": "precision.cur",
+        "text": "text.cur",
+        "handwriting": "handwriting.cur",
+        "unavailable": "unavailable.cur",
+        "vertical": "vertical.cur",
+        "horizontal": "horizontal.cur",
+        "diagonal_1": "diagonal_1.cur",
+        "diagonal_2": "diagonal_2.cur",
+        "move": "move.cur",
+        "alternate": "alternate.cur",
+        "link": "link.ani",
+        "location": "location.cur",
+        "person": "person.cur"
+    }
+}
