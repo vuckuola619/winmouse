@@ -113,6 +113,84 @@ def draw_ibeam(fill_color, outline_color):
     draw.rectangle([10, 26, 22, 27], fill=fill_color)
     return img
 
+import math
+
+def generate_pulse_arrow_frames(fill_color, outline_color, frames=12):
+    """Generates frames for a pulsing arrow cursor."""
+    img_list = []
+    base_img = draw_arrow(fill_color, outline_color)
+    for i in range(frames):
+        # Pulse alpha channel
+        alpha_scale = 0.5 + 0.5 * math.sin(i * 2 * math.pi / frames)
+        
+        frame_img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+        # Draw a glowing shadow
+        glow_draw = ImageDraw.Draw(frame_img)
+        glow_radius = 2 + 4 * alpha_scale
+        glow_color = (*fill_color[:3], int(150 * alpha_scale))
+        glow_draw.polygon([(0,0), (22,15), (14,17), (20,26), (17,28), (11,19), (6,22)], fill=glow_color)
+        
+        # Overlay original image
+        frame_img.alpha_composite(base_img)
+        img_list.append(frame_img)
+    return img_list
+
+def generate_spin_frames(fill_color, outline_color, frames=12):
+    """Generates frames for a spinning ring cursor (busy)."""
+    img_list = []
+    for i in range(frames):
+        frame_img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(frame_img)
+        
+        # Draw base arrow
+        arrow = draw_arrow(fill_color, outline_color)
+        frame_img.alpha_composite(arrow)
+        
+        # Draw spinning ring next to the arrow
+        cx, cy = 20, 20
+        radius = 6
+        angle = i * 360 / frames
+        start = angle
+        end = angle + 270
+        
+        draw.arc([cx - radius, cy - radius, cx + radius, cy + radius], start, end, fill=fill_color, width=3)
+        draw.arc([cx - radius - 1, cy - radius - 1, cx + radius + 1, cy + radius + 1], start, end, fill=outline_color, width=1)
+        draw.arc([cx - radius + 1, cy - radius + 1, cx + radius - 1, cy + radius - 1], start, end, fill=outline_color, width=1)
+        
+        img_list.append(frame_img)
+    return img_list
+
+def generate_click_hand_frames(fill_color, outline_color, frames=6):
+    """Generates frames for a hand cursor that clicks and releases."""
+    img_list = []
+    for i in range(frames):
+        frame_img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(frame_img)
+        
+        # Click offset: moves down slightly in the middle of the animation
+        offset_y = 2 if i in [2, 3] else 0
+        
+        draw.rectangle([10, 22 + offset_y, 22, 29 + offset_y], fill=outline_color)
+        draw.rectangle([12, 23 + offset_y, 20, 28 + offset_y], fill=fill_color)
+        draw.ellipse([8, 14 + offset_y, 24, 24 + offset_y], fill=outline_color)
+        draw.ellipse([9, 15 + offset_y, 23, 23 + offset_y], fill=fill_color)
+        
+        # The pointing finger: shrinks slightly when clicking
+        finger_top = 2 + (2 if offset_y else 0)
+        draw.rectangle([14, finger_top, 18, 16 + offset_y], fill=outline_color)
+        draw.rectangle([15, finger_top + 1, 17, 15 + offset_y], fill=fill_color)
+        
+        draw.ellipse([7, 16 + offset_y, 12, 21 + offset_y], fill=outline_color)
+        draw.ellipse([8, 17 + offset_y, 11, 20 + offset_y], fill=fill_color)
+        
+        # Draw a little click ripple if in clicked state
+        if offset_y > 0:
+            draw.arc([2, 2, 26, 26], -45, 45, fill=fill_color, width=1)
+            draw.arc([4, 4, 24, 24], 135, 225, fill=fill_color, width=1)
+            
+        img_list.append(frame_img)
+    return img_list
+
 
 def remove_background(img: Image.Image, chroma_color: dict, tolerance: int, mode: str) -> Image.Image:
     """
@@ -921,17 +999,25 @@ def delete_pack():
         return jsonify({"success": False, "error": str(e)}), 500
 
 def generate_default_packs():
-    """Generates two built-in packs (Neon Cyber and Retro Pixel) offline."""
+    """Generates built-in packs offline."""
     packs_config = {
         "NeonCyber": {
             "name": "Neon Cyber",
             "fill": (0, 240, 255, 255),       # Cyan
-            "outline": (217, 70, 239, 255)   # Magenta
+            "outline": (217, 70, 239, 255),   # Magenta
+            "animated": False
         },
         "RetroPixel": {
             "name": "Retro Pixel",
             "fill": (255, 255, 255, 255),     # White
-            "outline": (0, 0, 0, 255)         # Black
+            "outline": (0, 0, 0, 255),         # Black
+            "animated": False
+        },
+        "CyberPulseAnimated": {
+            "name": "Cyber Pulse (Animated)",
+            "fill": (57, 255, 20, 255),       # Neon Green
+            "outline": (0, 0, 0, 255),         # Black
+            "animated": True
         }
     }
     
@@ -950,41 +1036,63 @@ def generate_default_packs():
         
         fill = conf["fill"]
         outline = conf["outline"]
+        is_anim = conf.get("animated", False)
         
         # Create images for each role
         for role in CURSOR_REGISTRY_MAP.keys():
-            if role in ["normal", "working", "help", "alternate"]:
-                img = draw_arrow(fill, outline)
-                hx, hy = 0, 0
-            elif role in ["link", "location", "person"]:
-                img = draw_hand(fill, outline)
-                hx, hy = 16, 2
-            elif role in ["precision"]:
-                img = draw_crosshair(fill, outline)
-                hx, hy = 16, 16
-            elif role in ["busy"]:
-                img = draw_hourglass(fill, outline)
-                hx, hy = 16, 16
-            elif role in ["text"]:
-                img = draw_ibeam(fill, outline)
-                hx, hy = 16, 16
-            else: # Resizing and others
-                img = draw_crosshair(fill, outline) # Fallback
-                hx, hy = 16, 16
+            frames = []
+            hx, hy = 16, 16
             
-            # Save CUR file
-            cur_bytes = convert_png_to_cur(img, hx, hy)
-            cur_filename = f"{role}.cur"
-            cur_path = os.path.join(pack_dir, cur_filename)
-            with open(cur_path, "wb") as f:
-                f.write(cur_bytes)
+            if role in ["normal", "working", "help", "alternate"]:
+                hx, hy = 0, 0
+                if is_anim and role == "normal":
+                    frames = generate_pulse_arrow_frames(fill, outline)
+                else:
+                    frames = [draw_arrow(fill, outline)]
+            elif role in ["link", "location", "person"]:
+                hx, hy = 16, 2
+                if is_anim and role == "link":
+                    frames = generate_click_hand_frames(fill, outline)
+                else:
+                    frames = [draw_hand(fill, outline)]
+            elif role in ["precision"]:
+                hx, hy = 16, 16
+                frames = [draw_crosshair(fill, outline)]
+            elif role in ["busy"]:
+                hx, hy = 16, 16
+                if is_anim:
+                    frames = generate_spin_frames(fill, outline)
+                else:
+                    frames = [draw_hourglass(fill, outline)]
+            elif role in ["text"]:
+                hx, hy = 16, 16
+                frames = [draw_ibeam(fill, outline)]
+            else: # Resizing and others
+                hx, hy = 16, 16
+                frames = [draw_crosshair(fill, outline)] # Fallback
+            
+            # Save cursor file (CUR or ANI)
+            if len(frames) > 1:
+                # It's animated
+                frames_bytes = [convert_png_to_cur(f, hx, hy) for f in frames]
+                cursor_bytes = create_ani(frames_bytes, jif_rate=6)
+                ext = ".ani"
+            else:
+                # Static
+                cursor_bytes = convert_png_to_cur(frames[0], hx, hy)
+                ext = ".cur"
                 
-            # Save PNG preview
+            cursor_filename = f"{role}{ext}"
+            cursor_path = os.path.join(pack_dir, cursor_filename)
+            with open(cursor_path, "wb") as f:
+                f.write(cursor_bytes)
+                
+            # Save PNG preview (always the first frame)
             png_filename = f"{role}.png"
             png_path = os.path.join(pack_dir, png_filename)
-            img.save(png_path, "PNG")
+            frames[0].save(png_path, "PNG")
             
-            manifest["cursors"][role] = cur_filename
+            manifest["cursors"][role] = cursor_filename
             
         with open(manifest_path, "w") as f:
             json.dump(manifest, f, indent=4)
